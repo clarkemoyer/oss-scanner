@@ -1,0 +1,30 @@
+name: FFC upstream scanner validation
+
+on:
+  push:
+    branches: ['validation/ffc-scanner-checks']
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        project: [ffc-footer-only-template, ffc-single-page-template]
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+      - name: Install manifest validator dependency
+        run: python3 -m pip install PyYAML==6.0.3
+      - name: Validate manifests
+        run: python3 tools/validate.py
+      - name: Run the upstream scanner build, including its tool layers
+        run: python3 tools/check '${{ matrix.project }}' --no-shell --dir '${{ runner.temp }}/scanner-check'
+      - name: Run tests in the finished scanner image without networking
+        run: |
+          docker run --rm --network none 'oss-scanner-check/built:${{ matrix.project }}' bash -eu -c 'test -f /src/out/index.html; pnpm test; node scripts/check-scanner-browser.mjs'
